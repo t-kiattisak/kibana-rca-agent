@@ -1,0 +1,60 @@
+services:
+  # 1. Elasticsearch Single-Node
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    container_name: elasticsearch
+    environment:
+      - node.name=es01
+      - cluster.name=rca-cluster
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'cluster_name'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - rca-net
+
+  # 2. Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.17.0
+    container_name: kibana
+    environment:
+      - SERVER_NAME=kibana
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - XPACK_SECURITY_ENABLED=false
+      - XPACK_ALERTING_ENABLED=true
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - rca-net
+
+  # 3. Demo Application (Order Service)
+  app:
+    build:
+      context: .
+      dockerfile: cmd/app/Dockerfile
+    container_name: demo-app
+    environment:
+      - PORT=8000
+      - SERVICE_NAME=order-service
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - LOGS_INDEX=logs-app-dev
+    ports:
+      - "8000:8000"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - rca-net
+
+networks:
+  rca-net:
+    driver: bridge

@@ -1,46 +1,46 @@
-# คู่มือการตั้งค่า Alert Rule & Webhook Connector ใน Kibana UI
+# Kibana Alert Rule & Webhook Connector Setup Guide
 
-คู่มือนี้อธิบายวิธีตั้งค่า Kibana Alert Rule เพื่อให้ระบบตรวจจับ Error Log และยิง Webhook ส่งมาที่ AI RCA Agent โดยทำผ่าน Kibana UI ได้เองอย่างปลอดภัย ไม่ต้องใช้ Script ใดๆ
+This guide provides step-by-step instructions for configuring Kibana Alert Rules and Webhook Connectors directly through the Kibana UI without relying on automated shell scripts.
 
 ---
 
-## ส่วนที่ 1: สร้าง Webhook Connector (เชื่อมต่อไปหา AI Agent)
+## Part 1: Create Webhook Connector (Connect to AI RCA Agent)
 
-1. เปิดเบราว์เซอร์ไปที่ **Kibana**: `http://localhost:5601`
-2. เมนูด้านซ้ายล่าง คลิก **Stack Management**
-3. ภายใต้หัวข้อ **Alerts and Insights** $\rightarrow$ คลิก **Connectors**
-4. คลิกปุ่ม **Create connector** (มุมขวาบน)
-5. เลือกประเภท connector เป็น **Webhook**
-6. กรอกรายละเอียดดังนี้:
+1. Open your browser and navigate to **Kibana**: `http://localhost:5601`.
+2. In the bottom-left navigation menu, click **Stack Management**.
+3. Under **Alerts and Insights**, select **Connectors**.
+4. Click the **Create connector** button (top right).
+5. Choose **Webhook** as the connector type.
+6. Fill in the following details:
    - **Name:** `RCA Agent Webhook`
    - **Method:** `POST`
-   - **URL:** `http://rca-agent:8080/webhook/alert` *(หรือ `http://localhost:8080/webhook/alert` หากรันนอก Docker)*
+   - **URL:** `http://rca-agent:8080/webhook/alert` *(or `http://localhost:8080/webhook/alert` if running locally outside Docker)*
    - **Authentication:** `None`
-7. คลิกปุ่ม **Save & close**
+7. Click **Save & close**.
 
 ---
 
-## ส่วนที่ 2: สร้าง Alert Rule (กำหนดเงื่อนไขการตรวจจับ)
+## Part 2: Create Alert Rule (Define Anomaly / Error Threshold)
 
-1. ที่เมนู **Stack Management** $\rightarrow$ คลิก **Rules**
-2. คลิกปุ่ม **Create rule**
-3. กรอกรายละเอียดทั่วไป:
+1. In the **Stack Management** menu, select **Rules**.
+2. Click **Create rule**.
+3. Configure the general properties:
    - **Name:** `High 5xx Spike on App`
    - **Check every:** `1 minute`
    - **Notify:** `On check`
-4. เลือกเงื่อนไขตรวจจับ (**Rule type**):
-   - เลือก **Elasticsearch query**
+4. Define the detection condition (**Rule type**):
+   - Select **Elasticsearch query**.
    - **Index:** `logs-app-*`
    - **Query (KQL):**
      ```text
      level: "ERROR" or http_status >= 500
      ```
-   - **Threshold:** `IS ABOVE 3` ในช่วง `1 minute`  
-     *(หมายถึง: หากมี log ที่เป็น ERROR หรือสถานะ 500 ขึ้นไป เกิน 3 รายการใน 1 นาที ให้แจ้งเตือนทันที)*
-5. กำหนดการทำงานเมื่อเข้าเงื่อนไข (**Actions**):
-   - ในหัวข้อ Actions เลือก Connector ที่สร้างไว้: `RCA Agent Webhook`
-   - เลือก Action group: **Query matched**
-   - ในช่อง **Body (JSON)** ให้ระบุ payload template ดังนี้:
+   - **Threshold:** `IS ABOVE 3` in the last `1 minute`.  
+     *(Trigger condition: fires when more than 3 ERROR or 5xx logs appear within 1 minute)*.
+5. Configure the alert trigger (**Actions**):
+   - Under **Actions**, select your created connector: `RCA Agent Webhook`.
+   - Action group: **Query matched**.
+   - In the **Body (JSON)** editor, provide the payload template:
      ```json
      {
        "rule_id": "{{{rule.id}}}",
@@ -50,11 +50,11 @@
        "alert_reason": "High error rate detected in the last minute"
      }
      ```
-6. คลิก **Save**
+6. Click **Save**.
 
 ---
 
-## การทำงานหลังจากตั้งค่าเสร็จ
-- Kibana จะคอยตรวจสอบ Index `logs-app-*` ทุกๆ 1 นาที
-- เมื่อมีการยิง Endpoint ที่ทำให้เกิด Error เกิน 3 ครั้ง Kibana จะส่ง HTTP POST เข้าหา AI RCA Agent ทันที
-- เราสามารถกดเปิด/ปิด (Enable/Disable) Rule ได้จากหน้าจอนี้ตลอดเวลาตามต้องการ
+## How It Works
+- Kibana evaluates `logs-app-*` every minute.
+- Once any fault scenario emits more than 3 errors within a 1-minute window, Kibana triggers an HTTP POST to the AI RCA Agent.
+- Rules can be enabled, disabled, or tested directly from the Kibana UI at any time.

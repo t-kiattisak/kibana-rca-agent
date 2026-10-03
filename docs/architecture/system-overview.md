@@ -54,7 +54,7 @@ flowchart TD
     Client -->|Generate Traffic & Injected Faults| App
     Logger -->|Ingest JSON Logs| ESLogs
     Kibana -->|Fire Alert Webhook| WHReceiver
-    ESFetcher -.->|Fetch Logs (-5m to +1m, trace_id)| ESLogs
+    ESFetcher -.->|"Fetch Logs (-5m to +1m, trace_id)"| ESLogs
     VectorMatcher -.->|kNN Cosine Vector Search| ESVector
     LLM -.->|Index New Incident for Future Memory| ESVector
     Dispatcher --> Slack

@@ -24,6 +24,7 @@ type Config struct {
 	GeminiKey      string
 	GeminiModel    string
 	SlackWebhook   string
+	DiscordWebhook string
 	PollInterval   time.Duration
 	TimeWindow     time.Duration
 	ErrorThreshold int
@@ -42,6 +43,7 @@ func loadConfig() Config {
 		GeminiKey:      getEnv("GEMINI_API_KEY", ""),
 		GeminiModel:    getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
 		SlackWebhook:   getEnv("SLACK_WEBHOOK_URL", ""),
+		DiscordWebhook: getEnv("DISCORD_WEBHOOK_URL", ""),
 		PollInterval:   time.Duration(pollSec) * time.Second,
 		TimeWindow:     time.Duration(timeWinMin) * time.Minute,
 		ErrorThreshold: threshold,
@@ -56,6 +58,9 @@ func main() {
 	log.Printf("• Error Threshold   : %d errors in %v", cfg.ErrorThreshold, cfg.TimeWindow)
 	log.Printf("• Poll Interval     : %v", cfg.PollInterval)
 	log.Printf("• Gemini Model      : %s", cfg.GeminiModel)
+	if cfg.DiscordWebhook != "" {
+		log.Println("• Discord Alerts    : Enabled")
+	}
 
 	if cfg.GeminiKey == "" {
 		log.Println("⚠️  WARNING: GEMINI_API_KEY is not set. LLM analysis will be skipped unless configured in environment.")
@@ -65,7 +70,7 @@ func main() {
 	defer cancel()
 
 	es := esclient.New(cfg.ElasticURL, cfg.ElasticIndex, cfg.ElasticUser, cfg.ElasticPass)
-	notify := notifier.New(cfg.SlackWebhook)
+	notify := notifier.New(cfg.SlackWebhook, cfg.DiscordWebhook)
 
 	var aiAnalyzer *analyzer.Analyzer
 	if cfg.GeminiKey != "" {
@@ -142,6 +147,9 @@ func main() {
 
 			// 4. Dispatch Notifications
 			notify.PrintConsole(incident, rca)
+			if err := notify.SendDiscord(incident, rca); err != nil {
+				log.Printf("Failed to dispatch Discord notification: %v", err)
+			}
 			if err := notify.SendSlack(incident, rca); err != nil {
 				log.Printf("Failed to dispatch Slack notification: %v", err)
 			}

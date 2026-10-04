@@ -20,3 +20,13 @@
 .idea/
 .vscode/
 *.swp
+
+# Node.js / LangGraph Agent
+node_modules/
+dist/
+agent/node_modules/
+agent/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store

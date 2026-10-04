@@ -36,16 +36,16 @@ We decouple the incident investigation into a **Multi-Agent War Room** composed 
          (With Per-Role Token Usage)
 ```
 
-### 1. Modular Role Architecture (`internal/role/`)
-Each expert role is modeled as an independent implementation of the `ExpertAgent` interface:
-- **`TechLeadAgent` (`internal/role/tech_lead_agent.go`):** Reads stack traces, identifies coding patterns, spots unit test gaps, and suggests code hotfixes. Filtered context: `category in ['architecture', 'test']`.
-- **`SREAgent` (`internal/role/sre_agent.go`):** Inspects HikariCP pool saturation, container restarts, and database metrics. Filtered context: `category in ['infrastructure', 'runbook']`.
-- **`ProductLeadAgent` (`internal/role/product_lead_agent.go`):** Assesses business SLA impact, GMV conversion drop, and invokes business fallback policies (e.g. Asynchronous Kafka intake). Filtered context: `category in ['business_policy']`.
-- **`CommanderAgent` (`internal/role/commander_agent.go`):** Reviews all expert testimonies, resolves priority conflicts, and produces the unified 3-stage Action Plan (`Immediate`, `Short-term`, `Permanent`).
+### 1. LangGraph StateGraph Architecture (`agent/src/`)
+Each expert role is modeled as a functional node inside the LangGraph StateGraph (`agent/src/graph.ts`):
+- **`techLeadNode` (`agent/src/nodes/techLeadNode.ts`):** Reads stack traces, identifies coding patterns, spots unit test gaps, and suggests code hotfixes. Filtered context: `target_role: "developer"`.
+- **`sreLeadNode` (`agent/src/nodes/sreLeadNode.ts`):** Inspects HikariCP pool saturation, container restarts, and database metrics. Filtered context: `target_role: "sre"`.
+- **`productLeadNode` (`agent/src/nodes/productLeadNode.ts`):** Assesses business SLA impact, GMV conversion drop, and invokes business fallback policies (e.g. Asynchronous intake). Filtered context: `target_role: "product"`.
+- **`commanderNode` (`agent/src/nodes/commanderNode.ts`):** Reviews all expert testimonies, resolves priority conflicts, produces the unified 3-stage Action Plan, and evaluates whether a deep-dive cyclic loop is required.
 
 ### 2. Token Consumption & Cost Tracker
-Each agent call extracts `UsageMetadata` from the Gemini API response (`PromptTokenCount`, `CandidatesTokenCount`, `TotalTokenCount`). 
-The coordinator accumulates token metrics per role and reports a detailed breakdown in the Discord Embed and Console:
+Each agent node extracts token metadata from the Gemini API response (`promptTokenCount`, `candidatesTokenCount`, `totalTokenCount`). 
+The StateGraph accumulates token metrics per role and reports a detailed breakdown in the Discord Embed and Console:
 - Per-role token consumption.
 - Total incident triage token cost.
 

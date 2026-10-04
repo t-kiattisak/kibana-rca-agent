@@ -12,14 +12,12 @@ import (
 )
 
 type Notifier struct {
-	slackURL   string
 	discordURL string
 	httpClient *http.Client
 }
 
-func New(slackURL, discordURL string) *Notifier {
+func New(discordURL string) *Notifier {
 	return &Notifier{
-		slackURL:   slackURL,
 		discordURL: discordURL,
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
@@ -139,65 +137,6 @@ func (n *Notifier) SendDiscord(incident *model.IncidentContext, rca *model.RCARe
 	}
 
 	resp, err := n.httpClient.Post(n.discordURL, "application/json", bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	return nil
-}
-
-// SendSlack dispatches an incident card to a Slack webhook if configured
-func (n *Notifier) SendSlack(incident *model.IncidentContext, rca *model.RCAResult) error {
-	if n.slackURL == "" {
-		return nil
-	}
-
-	color := "#ffcc00"
-	if rca.Severity == "CRITICAL" {
-		color = "#cc0000"
-	} else if rca.Severity == "HIGH" {
-		color = "#ff6600"
-	}
-
-	payload := map[string]interface{}{
-		"attachments": []map[string]interface{}{
-			{
-				"color": color,
-				"title": fmt.Sprintf("[%s] Incident RCA: %s", rca.Severity, incident.ServiceName),
-				"fields": []map[string]interface{}{
-					{
-						"title": "Incident Summary",
-						"value": rca.IncidentSummary,
-						"short": false,
-					},
-					{
-						"title": "Probable Root Cause",
-						"value": rca.ProbableRootCause,
-						"short": false,
-					},
-					{
-						"title": "Immediate Action",
-						"value": rca.RecommendedActions.ImmediateWorkaround,
-						"short": false,
-					},
-					{
-						"title": "Permanent Fix",
-						"value": rca.RecommendedActions.PermanentFix,
-						"short": false,
-					},
-				},
-				"footer": "Kibana AI RCA Agent",
-				"ts":     time.Now().Unix(),
-			},
-		},
-	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	resp, err := n.httpClient.Post(n.slackURL, "application/json", bytes.NewReader(data))
 	if err != nil {
 		return err
 	}

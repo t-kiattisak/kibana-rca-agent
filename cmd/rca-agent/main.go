@@ -13,6 +13,7 @@ import (
 
 	"github.com/t-kiattisak/kibana-rca-agent/internal/analyzer"
 	"github.com/t-kiattisak/kibana-rca-agent/internal/esclient"
+	"github.com/t-kiattisak/kibana-rca-agent/internal/knowledge"
 	"github.com/t-kiattisak/kibana-rca-agent/internal/notifier"
 	"github.com/t-kiattisak/kibana-rca-agent/internal/sanitizer"
 )
@@ -24,7 +25,6 @@ type Config struct {
 	ElasticPass    string
 	GeminiKey      string
 	GeminiModel    string
-	SlackWebhook   string
 	DiscordWebhook string
 	PollInterval   time.Duration
 	TimeWindow     time.Duration
@@ -43,8 +43,7 @@ func loadConfig() Config {
 		ElasticUser:    getEnv("ELASTICSEARCH_USERNAME", ""),
 		ElasticPass:    getEnv("ELASTICSEARCH_PASSWORD", ""),
 		GeminiKey:      getEnv("GEMINI_API_KEY", ""),
-		GeminiModel:    getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
-		SlackWebhook:   getEnv("SLACK_WEBHOOK_URL", ""),
+		GeminiModel:    getEnv("GEMINI_MODEL", "gemini-3.5-flash"),
 		DiscordWebhook: getEnv("DISCORD_WEBHOOK_URL", ""),
 		PollInterval:   time.Duration(pollSec) * time.Second,
 		TimeWindow:     time.Duration(timeWinMin) * time.Minute,
@@ -72,9 +71,10 @@ func main() {
 	defer cancel()
 
 	es := esclient.New(cfg.ElasticURL, cfg.ElasticIndex, cfg.ElasticUser, cfg.ElasticPass)
-	notify := notifier.New(cfg.SlackWebhook, cfg.DiscordWebhook)
+	notify := notifier.New(cfg.DiscordWebhook)
 
 	var aiAnalyzer *analyzer.Analyzer
+	var kStore *knowledge.KnowledgeStore
 	if cfg.GeminiKey != "" {
 		var err error
 		aiAnalyzer, err = analyzer.New(ctx, cfg.GeminiKey, cfg.GeminiModel)
@@ -82,6 +82,13 @@ func main() {
 			log.Fatalf("Failed to initialize Gemini analyzer: %v", err)
 		}
 		log.Println("✅ Gemini AI Analyzer initialized successfully.")
+
+		// Initialize Vector Knowledge Store & auto-ingest documentation chunks
+		kStore = knowledge.NewStore(cfg.ElasticURL, "docs-knowledge-knn", aiAnalyzer.Client())
+		log.Println("📚 Indexing organizational documentation chunks into Vector DB...")
+		if err := kStore.IngestKnowledgeDirectory(ctx, "docs/knowledge"); err != nil {
+			log.Printf("⚠️ Warning: Knowledge ingestion error: %v", err)
+		}
 	}
 
 	// Cooldown tracker to prevent alert storms / duplicate LLM calls
@@ -133,19 +140,15 @@ func main() {
 			// 2. Data Sanitization / Masking
 			sanitizer.SanitizeIncident(incident)
 
-			// 3. Multi-Agent War Room Analysis (with Knowledge Docs & Token Tracker)
+			// 3. Multi-Agent War Room Analysis with Role-Filtered Vector kNN Retrieval
 			if aiAnalyzer == nil {
 				log.Println("ℹ️  GEMINI_API_KEY not configured. Displaying raw incident context:")
 				fmt.Printf("Incident on Service: %s, Total Errors: %d\n", incident.ServiceName, incident.TotalErrors)
 				continue
 			}
 
-			// Load organizational knowledge docs (ADRs, Business rules, Runbooks)
-			knowledgeDocs := analyzer.LoadKnowledgeDocs("docs/knowledge")
-			log.Printf("📚 Loaded %d organizational knowledge docs for Multi-Agent War Room", len(knowledgeDocs))
-
-			log.Println("🧠 Convening Modular Multi-Agent War Room (Tech Lead, SRE, Product Lead)...")
-			warRoom, err := aiAnalyzer.RunModularWarRoom(ctx, incident, knowledgeDocs)
+			log.Println("🧠 Convening Modular Multi-Agent War Room with Role-Filtered Vector kNN...")
+			warRoom, err := aiAnalyzer.RunModularWarRoom(ctx, incident, kStore)
 			if err != nil {
 				log.Printf("War Room analysis failed: %v", err)
 				continue

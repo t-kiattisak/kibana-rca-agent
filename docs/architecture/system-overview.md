@@ -47,7 +47,7 @@ flowchart TD
     end
 
     subgraph Channels ["5. Notification Outputs"]
-        Slack["Slack Webhook"]
+        Discord["Discord Webhook (Rich Embeds)"]
         Console["STDOUT / Console Log"]
     end
 
@@ -57,7 +57,7 @@ flowchart TD
     ESFetcher -.->|"Fetch Logs (-5m to +1m, trace_id)"| ESLogs
     VectorMatcher -.->|kNN Cosine Vector Search| ESVector
     LLM -.->|Index New Incident for Future Memory| ESVector
-    Dispatcher --> Slack
+    Dispatcher --> Discord
     Dispatcher --> Console
 ```
 
@@ -86,25 +86,25 @@ sequenceDiagram
     participant ES as Elasticsearch (Logs & Vector)
     participant Kibana as Kibana Alert
     participant Ingest as Webhook Receiver
-    participant Loop as Event Loop & Worker
+    participant EvLoop as Event Loop & Worker
     participant LLM as Gemini LLM
-    participant Slack as Slack Channel
+    participant Discord as Discord Channel
 
     App->>ES: Stream Error Logs (DB Connection Pool exhausted)
     Kibana->>Kibana: Threshold exceeded
     Kibana->>Ingest: POST /webhook/alert
     Ingest-->>Kibana: 202 Accepted (<10ms)
-    Ingest->>Loop: Push to Buffered Channel
-    Loop->>Loop: Debounce & Deduplicate matching alerts (30s window)
-    Loop->>ES: 1. Query Correlated Logs (logs-app-*, [-5m, +1m])
-    ES-->>Loop: Return error logs & stack traces
-    Loop->>ES: 2. Vector kNN Search (incident-memory-knn, query=error signature)
-    ES-->>Loop: Return matching past post-mortems & internal runbooks
-    Loop->>Loop: 3. Mask PII & Secrets
-    Loop->>LLM: 4. Prompt: Correlated Logs + Past Incident Knowledge
-    LLM-->>Loop: Structured RCA Report
-    Loop->>Slack: 5. Dispatch Alert Card
-    Loop->>ES: 6. (Optional) Index new incident post-mortem into Vector Memory
+    Ingest->>EvLoop: Push to Buffered Channel
+    EvLoop->>EvLoop: Debounce & Deduplicate matching alerts (30s window)
+    EvLoop->>ES: 1. Query Correlated Logs (logs-app-*, [-5m, +1m])
+    ES-->>EvLoop: Return error logs & stack traces
+    EvLoop->>ES: 2. Vector kNN Search (incident-memory-knn, query=error signature)
+    ES-->>EvLoop: Return matching past post-mortems & internal runbooks
+    EvLoop->>EvLoop: 3. Mask PII & Secrets
+    EvLoop->>LLM: 4. Prompt: Correlated Logs + Past Incident Knowledge
+    LLM-->>EvLoop: Structured RCA Report
+    EvLoop->>Discord: 5. Dispatch Rich Embeds Card
+    EvLoop->>ES: 6. (Optional) Index new incident post-mortem into Vector Memory
 ```
 
 ---

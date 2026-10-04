@@ -17,6 +17,10 @@ type Analyzer struct {
 	model  string
 }
 
+func (a *Analyzer) Client() *genai.Client {
+	return a.client
+}
+
 func New(ctx context.Context, apiKey, modelName string) (*Analyzer, error) {
 	if modelName == "" {
 		modelName = "gemini-2.5-flash"

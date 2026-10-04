@@ -29,13 +29,13 @@ type KnowledgeDoc struct {
 func GenerateWithRetry(ctx context.Context, client *genai.Client, model string, prompt string, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 	var result *genai.GenerateContentResponse
 	var err error
-	for attempt := 1; attempt <= 4; attempt++ {
+	for attempt := 1; attempt <= 6; attempt++ {
 		result, err = client.Models.GenerateContent(ctx, model, genai.Text(prompt), config)
 		if err == nil {
 			return result, nil
 		}
-		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "high demand") {
-			time.Sleep(time.Duration(attempt*2) * time.Second)
+		if strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "high demand") || strings.Contains(err.Error(), "UNAVAILABLE") {
+			time.Sleep(time.Duration(attempt*3) * time.Second)
 			continue
 		}
 		return nil, err

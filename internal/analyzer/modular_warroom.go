@@ -50,8 +50,10 @@ func LoadKnowledgeDocs(dir string) []role.KnowledgeDoc {
 	return docs
 }
 
-// RunModularWarRoom coordinates independent expert agents and calculates per-role token breakdown
-func (a *Analyzer) RunModularWarRoom(ctx context.Context, incident *model.IncidentContext, docs []role.KnowledgeDoc) (*model.WarRoomResult, error) {
+// RunModularWarRoom coordinates independent expert agents with role-filtered vector kNN retrieval
+func (a *Analyzer) RunModularWarRoom(ctx context.Context, incident *model.IncidentContext, store interface{
+	RetrieveRelevantChunks(ctx context.Context, queryText string, targetRole string, k int) ([]role.KnowledgeDoc, error)
+}) (*model.WarRoomResult, error) {
 	// Instantiate specialized role agents
 	techLead := role.NewTechLeadAgent(a.client, a.model)
 	sreLead := role.NewSREAgent(a.client, a.model)
@@ -61,34 +63,55 @@ func (a *Analyzer) RunModularWarRoom(ctx context.Context, incident *model.Incide
 	var perspectives []model.RolePerspective
 	var totalTokens model.TokenUsage
 
-	// 1. Tech Lead analyzes code, traces, and tests
-	log.Println("   🧑‍💻 Consulting Software Tech Lead...")
-	techView, err := techLead.Analyze(ctx, incident, docs)
+	// Build compact query string from incident signatures
+	incidentQuery := fmt.Sprintf("%s %s", incident.ServiceName, strings.Join(incident.ErrorSignatures, " "))
+
+	// 1. Tech Lead: Retrieve code/architecture vector chunks (Top-1 most relevant chunk)
+	log.Println("   🧑‍💻 Searching Vector DB (kNN) for Tech Lead architecture chunks...")
+	techDocs, err := store.RetrieveRelevantChunks(ctx, incidentQuery, "developer", 1)
+	if err != nil || len(techDocs) == 0 {
+		log.Printf("      ⚠️ Vector search returned fallback for developer")
+	} else {
+		log.Printf("      🎯 Retrieved chunk: %s", techDocs[0].Title)
+	}
+	techView, err := techLead.Analyze(ctx, incident, techDocs)
 	if err != nil {
 		return nil, fmt.Errorf("tech lead analysis failed: %w", err)
 	}
 	perspectives = append(perspectives, *techView)
 	accumulateTokens(&totalTokens, techView.Tokens)
 
-	// 2. SRE analyzes infrastructure, connection pools, and container health
-	log.Println("   🛠️ Consulting Principal SRE...")
-	sreView, err := sreLead.Analyze(ctx, incident, docs)
+	// 2. SRE: Retrieve infrastructure/runbook vector chunks (Top-1 most relevant chunk)
+	log.Println("   🛠️ Searching Vector DB (kNN) for SRE runbook chunks...")
+	sreDocs, err := store.RetrieveRelevantChunks(ctx, incidentQuery, "sre", 1)
+	if err != nil || len(sreDocs) == 0 {
+		log.Printf("      ⚠️ Vector search returned fallback for SRE")
+	} else {
+		log.Printf("      🎯 Retrieved chunk: %s", sreDocs[0].Title)
+	}
+	sreView, err := sreLead.Analyze(ctx, incident, sreDocs)
 	if err != nil {
 		return nil, fmt.Errorf("SRE analysis failed: %w", err)
 	}
 	perspectives = append(perspectives, *sreView)
 	accumulateTokens(&totalTokens, sreView.Tokens)
 
-	// 3. Product Lead analyzes business policy, GMV revenue impact, and degraded modes
-	log.Println("   👔 Consulting Product & Business Lead...")
-	prodView, err := productLead.Analyze(ctx, incident, docs)
+	// 3. Product Lead: Retrieve business policy vector chunks (Top-1 most relevant chunk)
+	log.Println("   👔 Searching Vector DB (kNN) for Product Lead business policy chunks...")
+	prodDocs, err := store.RetrieveRelevantChunks(ctx, incidentQuery, "product", 1)
+	if err != nil || len(prodDocs) == 0 {
+		log.Printf("      ⚠️ Vector search returned fallback for product")
+	} else {
+		log.Printf("      🎯 Retrieved chunk: %s", prodDocs[0].Title)
+	}
+	prodView, err := productLead.Analyze(ctx, incident, prodDocs)
 	if err != nil {
 		return nil, fmt.Errorf("product lead analysis failed: %w", err)
 	}
 	perspectives = append(perspectives, *prodView)
 	accumulateTokens(&totalTokens, prodView.Tokens)
 
-	// 4. Incident Commander synthesizes consensus and final prioritized runbook
+	// 4. Incident Commander: Synthesizes final prioritized runbook
 	log.Println("   👑 Incident Commander synthesizing final consensus...")
 	consensus, actionSteps, severity, rootCause, cmdTokens, err := commander.SynthesizeConsensus(ctx, incident, perspectives)
 	if err != nil {

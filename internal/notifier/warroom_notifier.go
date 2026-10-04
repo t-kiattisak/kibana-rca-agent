@@ -66,7 +66,7 @@ func (n *Notifier) SendWarRoomDiscord(incident *model.IncidentContext, warRoom *
 	fields := []map[string]interface{}{
 		{
 			"name":   "🔍 Incident Summary & Root Cause",
-			"value":  fmt.Sprintf("**Summary:** %s\n**Root Cause:** %s", warRoom.IncidentSummary, warRoom.ProbableRootCause),
+			"value":  truncate(fmt.Sprintf("**Summary:** %s\n**Root Cause:** %s", warRoom.IncidentSummary, warRoom.ProbableRootCause), 1020),
 			"inline": false,
 		},
 	}
@@ -86,7 +86,7 @@ func (n *Notifier) SendWarRoomDiscord(incident *model.IncidentContext, warRoom *
 		tokenBadge := fmt.Sprintf("\n*(Tokens: in:%d, out:%d, total:%d)*", p.Tokens.PromptTokens, p.Tokens.CandidatesTokens, p.Tokens.TotalTokens)
 		fields = append(fields, map[string]interface{}{
 			"name":   fmt.Sprintf("%s %s", icon, p.Role),
-			"value":  fmt.Sprintf("**Assessment:** %s\n**Proposed Action:** %s%s%s", p.Assessment, p.ActionProposal, docCitations, tokenBadge),
+			"value":  truncate(fmt.Sprintf("**Assessment:** %s\n**Proposed Action:** %s%s%s", p.Assessment, p.ActionProposal, docCitations, tokenBadge), 1020),
 			"inline": false,
 		})
 	}
@@ -94,7 +94,7 @@ func (n *Notifier) SendWarRoomDiscord(incident *model.IncidentContext, warRoom *
 	// Commander Consensus
 	fields = append(fields, map[string]interface{}{
 		"name":   "👑 Incident Commander Final Consensus",
-		"value":  warRoom.CommanderConsensus,
+		"value":  truncate(warRoom.CommanderConsensus, 1020),
 		"inline": false,
 	})
 
@@ -105,7 +105,7 @@ func (n *Notifier) SendWarRoomDiscord(incident *model.IncidentContext, warRoom *
 	}
 	fields = append(fields, map[string]interface{}{
 		"name":   "📋 Prioritized Action Plan",
-		"value":  actionStepsStr.String(),
+		"value":  truncate(actionStepsStr.String(), 1020),
 		"inline": false,
 	})
 
@@ -145,5 +145,18 @@ func (n *Notifier) SendWarRoomDiscord(incident *model.IncidentContext, warRoom *
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		return fmt.Errorf("discord returned status %d: %s", resp.StatusCode, buf.String())
+	}
 	return nil
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }

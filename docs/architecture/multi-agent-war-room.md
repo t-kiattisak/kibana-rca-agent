@@ -57,56 +57,53 @@ sequenceDiagram
 
 ## 3. Specialized Role Specifications
 
-Each role implements the Go interface `ExpertAgent` (`internal/role/base.go`):
+Each role is modeled as a functional node in the LangGraph StateGraph (`agent/src/nodes/`):
 
-```go
-type ExpertAgent interface {
-    Name() string
-    RoleTitle() string
-    Analyze(ctx context.Context, incident *model.IncidentContext, docs []KnowledgeDoc) (*model.RolePerspective, error)
-}
+```typescript
+export async function roleNode(state: WarRoomStateType): Promise<Partial<WarRoomStateType>>
 ```
 
-### 🧑‍💻 1. Software Tech Lead & Code Architect (`internal/role/tech_lead_agent.go`)
+### 🧑‍💻 1. Software Tech Lead & Code Architect (`agent/src/nodes/techLeadNode.ts`)
 - **Primary Focus:** Application source code, stack traces, transaction lifecycles, and context propagation.
 - **Investigation Targets:**
   - `nil-pointer dereference` panics and missing defensive checks.
   - Context deadline omissions (`context.WithTimeout`).
   - Database connection leaks (missing `defer tx.Rollback()`).
   - Unit/Integration test coverage gaps.
-- **Knowledge Base Filter:** `category in ["architecture", "test"]` (e.g., `architecture-order-repo.md`).
+- **Knowledge Base Filter:** `target_role: "developer"` (e.g., `architecture-order-repo.md`).
 - **Output:** Concrete code remediation proposals, PR guidance, and test recommendations.
 
 ---
 
-### 🛠️ 2. Principal SRE & Platform Engineer (`internal/role/sre_agent.go`)
+### 🛠️ 2. Principal SRE & Platform Engineer (`agent/src/nodes/sreLeadNode.ts`)
 - **Primary Focus:** Infrastructure health, container orchestration, connection pool saturation, and dependency resilience.
 - **Investigation Targets:**
   - HikariCP / database pool starvation (active connections vs max connections).
   - Outbound latency and 3rd-party upstream timeouts (HTTP 504 / gateway failures).
   - Kubernetes pod crash loops and memory limits.
-- **Knowledge Base Filter:** `category in ["infrastructure", "runbook"]` (e.g., `infra-runbook-db.md`).
+- **Knowledge Base Filter:** `target_role: "sre"` (e.g., `infra-runbook-db.md`).
 - **Output:** Operational runbook commands, rolling restart procedures, circuit breaker settings, and config tuning.
 
 ---
 
-### 👔 3. Product & Business Operations Lead (`internal/role/product_lead_agent.go`)
+### 👔 3. Product & Business Operations Lead (`agent/src/nodes/productLeadNode.ts`)
 - **Primary Focus:** Customer experience, SLA compliance, revenue risk, and business fallback policies.
 - **Investigation Targets:**
   - Estimated GMV revenue loss (e.g., Average Order Value [AOV] $\times$ failed checkout count).
   - Breach of SLA / SLO targets (e.g., 99.9% order success rate).
   - Customer retention and cart abandonment risks.
-- **Knowledge Base Filter:** `category in ["business_policy"]` (e.g., `business-campaign-rules.md`).
-- **Output:** Activation of Degraded Mode (ADR-005 asynchronous queuing), customer messaging, and marketing campaign pauses.
+- **Knowledge Base Filter:** `target_role: "product"` (e.g., `business-campaign-rules.md`).
+- **Output:** Activation of Degraded Mode (asynchronous queuing), customer messaging, and marketing campaign pauses.
 
 ---
 
-### 👑 4. Incident Commander Agent (`internal/role/commander_agent.go`)
+### 👑 4. Incident Commander Agent (`agent/src/nodes/commanderNode.ts`)
 - **Primary Focus:** Arbitration, cross-functional prioritization, and decisive consensus.
 - **Investigation Targets:**
-  - Synthesizing conflicting recommendations (e.g., SRE wanting immediate pod restarts vs Tech Lead needing runtime memory dumps).
-  - Assessing true incident severity (`CRITICAL`, `HIGH`, `MEDIUM`).
+  - Synthesizing conflicting recommendations.
+  - Assessing true incident severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
   - Structuring a chronological, actionable remediation runbook.
+  - Deciding whether to trigger a second-pass cyclic deep-dive loop.
 - **Output:**
   1. **Immediate Workaround (< 5 mins):** Rolling restart, scaling pool, switching to degraded mode.
   2. **Short-term Remediation (< 2 hours):** Hotfix deployment, config map tuning.
@@ -116,53 +113,25 @@ type ExpertAgent interface {
 
 ## 4. Per-Role Token Usage & Cost Transparency
 
-In a production environment, visibility into AI inference costs is essential. Every role independently tracks token usage using Gemini's `UsageMetadata`:
+In a production environment, visibility into AI inference costs is essential. Every role independently tracks token usage using Gemini's API metadata:
 
-```go
-type TokenUsage struct {
-    PromptTokens     int `json:"prompt_tokens"`
-    CandidatesTokens int `json:"candidates_tokens"`
-    TotalTokens      int `json:"total_tokens"`
+```typescript
+export interface RolePerspective {
+  role: string;
+  assessment: string;
+  actionProposal: string;
+  referencedDocs: string[];
+  promptTokens: number;
+  responseTokens: number;
+  totalTokens: number;
 }
-```
-
-### Discord Embed Integration
-The Discord webhook card renders individual token metrics for each role and a combined total:
-
-```text
-🧑‍💻 Software Tech Lead & Code Architect
-Assessment: ...
-Proposed Action: ...
-(Tokens: in:1240, out:310, total:1550)
-
-🛠️ Principal SRE & Platform Engineer
-Assessment: ...
-Proposed Action: ...
-(Tokens: in:1190, out:280, total:1470)
-
-👔 Product & Business Lead
-Assessment: ...
-Proposed Action: ...
-(Tokens: in:980, out:210, total:1190)
-
-👑 Incident Commander
-Assessment: ...
-(Tokens: in:1640, out:346, total:1986)
-
-----------------------------------------------------
-💰 Token Consumption Tracker:
-Prompt/Input : 5,050 tokens
-Output/Reason: 1,146 tokens
-Total Count  : 6,196 tokens
-----------------------------------------------------
 ```
 
 ---
 
 ## 5. Extensibility: Adding a New Role
 
-To add a new role (e.g., `SecurityLeadAgent` or `ComplianceAgent`):
-1. Create a new file in `internal/role/security_lead_agent.go`.
-2. Implement the `ExpertAgent` interface (`Name()`, `RoleTitle()`, and `Analyze()`).
-3. Add a specialized markdown knowledge file under `docs/knowledge/security-policies.md` with `Target Role: security`.
-4. Register the new role inside `RunModularWarRoom` in `internal/analyzer/modular_warroom.go`.
+To add a new role (e.g., `securityLeadNode`):
+1. Create a new node in `agent/src/nodes/securityLeadNode.ts`.
+2. Add a specialized markdown knowledge file under `docs/knowledge/` with metadata `Target Role: security`.
+3. Register the new node and fan-out edge inside `buildWarRoomGraph()` in `agent/src/graph.ts`.

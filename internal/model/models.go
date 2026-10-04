@@ -43,3 +43,32 @@ type RCAResult struct {
 	RecommendedActions RecommendedActions `json:"recommended_actions"`
 	AnalyzedAt         time.Time          `json:"analyzed_at"`
 }
+
+// TokenUsage tracks LLM token metrics
+type TokenUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CandidatesTokens int `json:"candidates_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+// RolePerspective captures single-role expert analysis
+type RolePerspective struct {
+	Role           string     `json:"role"` // "Software Tech Lead", "Principal SRE", "Product / Business Lead"
+	Assessment     string     `json:"assessment"`
+	ActionProposal string     `json:"action_proposal"`
+	ReferencedDocs []string   `json:"referenced_docs"`
+	Tokens         TokenUsage `json:"tokens"`
+}
+
+// WarRoomResult collects all multi-agent discussions and final commander consensus
+type WarRoomResult struct {
+	Severity           string            `json:"severity"`
+	IncidentSummary    string            `json:"incident_summary"`
+	ProbableRootCause  string            `json:"probable_root_cause"`
+	Perspectives       []RolePerspective `json:"perspectives"`
+	CommanderConsensus string            `json:"commander_consensus"`
+	ActionSteps        []string          `json:"action_steps"`
+	TotalTokens        TokenUsage        `json:"total_tokens"`
+	AnalyzedAt         time.Time         `json:"analyzed_at"`
+}
+

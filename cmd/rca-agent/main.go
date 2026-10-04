@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -31,6 +32,7 @@ type Config struct {
 }
 
 func loadConfig() Config {
+	loadDotEnv()
 	pollSec, _ := strconv.Atoi(getEnv("POLL_INTERVAL_SECONDS", "15"))
 	timeWinMin, _ := strconv.Atoi(getEnv("TIME_WINDOW_MINUTES", "1"))
 	threshold, _ := strconv.Atoi(getEnv("ERROR_THRESHOLD_COUNT", "3"))
@@ -131,27 +133,51 @@ func main() {
 			// 2. Data Sanitization / Masking
 			sanitizer.SanitizeIncident(incident)
 
-			// 3. AI RCA Analysis
+			// 3. Multi-Agent War Room Analysis (with Knowledge Docs & Token Tracker)
 			if aiAnalyzer == nil {
 				log.Println("ℹ️  GEMINI_API_KEY not configured. Displaying raw incident context:")
 				fmt.Printf("Incident on Service: %s, Total Errors: %d\n", incident.ServiceName, incident.TotalErrors)
 				continue
 			}
 
-			log.Println("🧠 Analyzing incident with Gemini LLM...")
-			rca, err := aiAnalyzer.AnalyzeIncident(ctx, incident)
+			// Load organizational knowledge docs (ADRs, Business rules, Runbooks)
+			knowledgeDocs := analyzer.LoadKnowledgeDocs("docs/knowledge")
+			log.Printf("📚 Loaded %d organizational knowledge docs for Multi-Agent War Room", len(knowledgeDocs))
+
+			log.Println("🧠 Convening Modular Multi-Agent War Room (Tech Lead, SRE, Product Lead)...")
+			warRoom, err := aiAnalyzer.RunModularWarRoom(ctx, incident, knowledgeDocs)
 			if err != nil {
-				log.Printf("AI analysis failed: %v", err)
+				log.Printf("War Room analysis failed: %v", err)
 				continue
 			}
 
-			// 4. Dispatch Notifications
-			notify.PrintConsole(incident, rca)
-			if err := notify.SendDiscord(incident, rca); err != nil {
-				log.Printf("Failed to dispatch Discord notification: %v", err)
+			// 4. Dispatch Notifications with Token Breakdown
+			notify.PrintWarRoomConsole(incident, warRoom)
+			if err := notify.SendWarRoomDiscord(incident, warRoom); err != nil {
+				log.Printf("Failed to dispatch War Room Discord notification: %v", err)
 			}
-			if err := notify.SendSlack(incident, rca); err != nil {
-				log.Printf("Failed to dispatch Slack notification: %v", err)
+		}
+	}
+}
+
+func loadDotEnv() {
+	data, err := os.ReadFile(".env")
+	if err != nil {
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			k := strings.TrimSpace(parts[0])
+			v := strings.TrimSpace(parts[1])
+			v = strings.Trim(v, `"'`)
+			if os.Getenv(k) == "" {
+				os.Setenv(k, v)
 			}
 		}
 	}
@@ -163,3 +189,4 @@ func getEnv(key, defaultVal string) string {
 	}
 	return defaultVal
 }
+

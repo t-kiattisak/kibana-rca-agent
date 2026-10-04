@@ -13,6 +13,8 @@ This project follows the [Architecture Decision Record (ADR)](https://github.com
   Choice of Google Gemini, deterministic pipeline, data sanitization, and structured JSON outputs.
 - **[ADR-004: Event Loop Processing & Vector Semantic Memory (kNN RAG)](docs/decisions/ADR-004-event-loop-and-vector-memory.md)**  
   Asynchronous ingestion via Go buffered channel, alert debouncing/deduplication, and native Elasticsearch v8 kNN vector search for institutional memory.
+- **[ADR-005: Multi-Agent War Room Pattern & Role-Based Knowledge Context](docs/decisions/ADR-005-multi-agent-war-room-architecture.md)**  
+  Decoupling triage into specialized roles (Tech Lead, SRE, Product Lead, Commander) with domain document citations and per-role token usage tracking.
 - **[System Architecture & Workflow Overview](docs/architecture/system-overview.md)**  
   Complete system overview, Mermaid sequence diagrams, and webhook/RCA data contracts.
 

@@ -116,6 +116,17 @@ export async function discordNotifierNode(state: WarRoomStateType): Promise<Part
     }
 
     console.log("   ✅ Successfully delivered LangGraph War Room card to Discord!");
+
+    // Save resolution into Long-Term Cross-Incident Store
+    const { saveIncidentToStore } = await import("../memoryStore");
+    await saveIncidentToStore(incident.serviceName, {
+      serviceName: incident.serviceName,
+      timestamp: incident.triggerTime,
+      probableRootCause: synthesis.probableRootCause,
+      consensus: synthesis.consensus,
+      effectiveActionSteps: synthesis.actionSteps,
+    });
+
     return { isDelivered: true };
   } catch (err) {
     console.error("Discord delivery exception:", err);

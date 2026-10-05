@@ -44,6 +44,13 @@ async function main() {
 
       const incident = await fetchCorrelatedLogs(25);
 
+      // Query Long-Term Memory for past incidents on this service
+      const { getHistoricalContext } = await import("./memoryStore");
+      const historicalContext = await getHistoricalContext(incident.serviceName);
+      if (historicalContext) {
+        console.log(`   💡 [Long-Term Memory] Injected historical precedents for ${incident.serviceName}`);
+      }
+
       const initialInput = {
         incident,
         retrievedDocs: [],
@@ -53,15 +60,20 @@ async function main() {
         needsDeepDive: false,
         deepDiveInstruction: "",
         isDelivered: false,
+        historicalContext,
       };
 
-      // Execute LangGraph StateGraph
-      const finalState = await warRoomApp.invoke(initialInput);
+      // Execute LangGraph StateGraph with Thread-level Checkpoint Memory
+      const threadId = `incident-${incident.serviceName}-${Date.now()}`;
+      const finalState = await warRoomApp.invoke(initialInput, {
+        configurable: { thread_id: threadId },
+      });
 
       console.log("\n🏛️ [LangGraph War Room Completed]");
-      console.log(`• Severity: ${finalState.synthesis?.severity}`);
-      console.log(`• Cycles  : ${finalState.loopCount} loop(s) executed`);
-      console.log(`• Status  : Delivered to Discord = ${finalState.isDelivered}`);
+      console.log(`• Severity : ${finalState.synthesis?.severity}`);
+      console.log(`• Thread ID: ${threadId}`);
+      console.log(`• Cycles   : ${finalState.loopCount} loop(s) executed`);
+      console.log(`• Status   : Delivered to Discord = ${finalState.isDelivered}`);
     } catch (err) {
       console.error("Error in LangGraph watcher tick:", err);
     }

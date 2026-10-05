@@ -1,10 +1,14 @@
-import { StateGraph, START, END } from "@langchain/langgraph";
+import { StateGraph, START, END, MemorySaver } from "@langchain/langgraph";
 import { WarRoomStateAnnotation, WarRoomStateType } from "./state";
 import { techLeadNode } from "./nodes/techLeadNode";
 import { sreLeadNode } from "./nodes/sreLeadNode";
 import { productLeadNode } from "./nodes/productLeadNode";
 import { commanderNode } from "./nodes/commanderNode";
 import { discordNotifierNode } from "./nodes/discordNotifierNode";
+import { incidentMemoryStore } from "./memoryStore";
+
+// Checkpointer for Short-Term thread state persistence (supports step-by-step resume & loops)
+export const warRoomCheckpointer = new MemorySaver();
 
 // Conditional Edge Router: Evaluate whether to loop back or notify
 export function routeAfterCommander(state: WarRoomStateType): "tech_lead" | "discord_notifier" {
@@ -43,5 +47,8 @@ export function buildWarRoomGraph() {
     // 5. End of graph
     .addEdge("discord_notifier", END);
 
-  return workflow.compile();
+  return workflow.compile({
+    checkpointer: warRoomCheckpointer,
+    store: incidentMemoryStore,
+  });
 }

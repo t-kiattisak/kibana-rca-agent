@@ -39,11 +39,17 @@ export async function generateJSONWithRetry<T>(
         totalTokens: usage?.totalTokenCount ?? 0,
       };
     } catch (err: any) {
-      lastError = err;
       const errMsg = err?.message || String(err);
-      if (errMsg.includes("503") || errMsg.includes("high demand") || errMsg.includes("UNAVAILABLE")) {
-        console.warn(`[Gemini 503 Retry] Attempt ${attempt}/5: Backing off for ${attempt * 3}s...`);
-        await new Promise((res) => setTimeout(res, attempt * 3000));
+      if (
+        errMsg.includes("503") ||
+        errMsg.includes("high demand") ||
+        errMsg.includes("UNAVAILABLE") ||
+        errMsg.includes("429") ||
+        errMsg.includes("RESOURCE_EXHAUSTED")
+      ) {
+        const delay = attempt * 4;
+        console.warn(`[Gemini Backoff Retry] Attempt ${attempt}/5 (status: rate-limit/busy): Backing off for ${delay}s...`);
+        await new Promise((res) => setTimeout(res, delay * 1000));
         continue;
       }
       throw err;

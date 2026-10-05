@@ -97,6 +97,12 @@ export const WarRoomStateAnnotation = Annotation.Root({
     reducer: (curr, update) => update ?? curr,
     default: () => false,
   }),
+
+  // Long-Term / Historical Memory Context (from previous incidents on this service)
+  historicalContext: Annotation<string>({
+    reducer: (curr, update) => update ?? curr,
+    default: () => "",
+  }),
 });
 
 export type WarRoomStateType = typeof WarRoomStateAnnotation.State;

@@ -33,6 +33,7 @@ Citations: ${p.referencedDocs.join(", ")}`
 Service: ${incident.serviceName}
 Total Errors: ${incident.totalErrors}
 Loop Count: ${state.loopCount}
+${state.historicalContext ? `\n${state.historicalContext}\n` : ""}
 
 Panel Perspectives:
 ${perspectivesText}
